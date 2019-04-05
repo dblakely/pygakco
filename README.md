@@ -1,6 +1,6 @@
-# cmake_example for pybind11
+# igakco for pybind11
 
-[![Build Status](https://travis-ci.org/pybind/cmake_example.svg?branch=master)](https://travis-ci.org/pybind/cmake_example)
+[![Build Status](https://travis-ci.org/pybind/igakco.svg?branch=master)](https://travis-ci.org/pybind/igakco)
 [![Build status](https://ci.appveyor.com/api/projects/status/57nnxfm4subeug43/branch/master?svg=true)](https://ci.appveyor.com/project/dean0x7d/cmake-example/branch/master)
 
 An example [pybind11](https://github.com/pybind/pybind11) module built with a
@@ -22,18 +22,46 @@ CMake project structure.
 
 
 ## Installation
-
-Just clone this repository and pip install. Note the `--recursive` option which is
-needed for the pybind11 submodule:
-
-```bash
-git clone --recursive https://github.com/pybind/cmake_example.git
-pip install ./cmake_example
+**With pip**
 ```
+pip install -i https://test.pypi.org/simple/ igakco-test
+```
+Currently, this may only work on Macs because (1) I'm developing on a Mac and (2) because there's a large diversity of Linux OSs, getting it to work on Linux machines is more involved (Eamon and I _have_ created working Linux wheels several times, but because it's more difficult, we're updating the igakco-test Linux wheel less often).
 
-With the `setup.py` file included in this example, the `pip install` command will
-invoke CMake and build the pybind11 module as specified in `CMakeLists.txt`.
+**From source**
+Download and extract the igakco tarball. From the directory above the `igakco` folder, run:
+`pip install ./igakco`
+or
+`pip3 install ./igakco`
 
+## Tutorial
+Example usage:
+```
+from igakco import SVM
+svm = SVM(g=7, m=5, C=0.7)
+svm.fit(train_file="1.1.train.fasta", test_file="1.1.test.fasta", quiet=False, kernel_file="output.txt")
+svm.predict("predictions.txt")
+```
+This will use the provided parameters to build train and test kernel matrices and train an SVM classifier. The `predict` call will write the predicted labels of the provided `test_file` to `predictions.txt`.
+
+## Documentation
+Constructor:
+* `g` (required)
+* `m` (required)
+* `C` (optional, default=1.0)
+* `nu` (optional, default=0.5)
+* `eps` (optional, default = 0.001) - LIBSVM epsilon parameter
+* `kernel` (optional, default = 'linear'). Options: linear, gakco, rbf
+
+Fit:
+* `train_file` (required)
+* `test_file` (required)
+* `dict` (optional). A dictionary file for the sequences in the train and test files. Default behavior is to infer the dictionary from the files.
+* `quiet` (optional, default=false). Whether to be verbose.
+* `kernel_file` (optional). If provided, the kernel matrix will be printed to the provided file. Otherwise, kernel matrix will not be saved.
+
+Predict:
+* `predictions_file` (required). File where predictions will be written. Format is one prediction, a single number, per line.
 
 ## Special notes for Windows
 
@@ -52,32 +80,6 @@ distribution, you can add `vs2015_runtime` as a platform-dependent runtime
 requirement for you package: see the `conda.recipe/meta.yaml` file in this example.
 
 
-## Building the documentation
-
-Documentation for the example project is generated using Sphinx. Sphinx has the
-ability to automatically inspect the signatures and documentation strings in
-the extension module to generate beautiful documentation in a variety formats.
-The following command generates HTML-based reference documentation; for other
-formats please refer to the Sphinx manual:
-
- - `cd cmake_example/docs`
- - `make html`
-
-
 ## License
 
-Pybind11 is provided under a BSD-style license that can be found in the LICENSE
-file. By using, distributing, or contributing to this project, you agree to the
-terms and conditions of this license.
-
-
-## Test call
-
-```python
-import cmake_example
-cmake_example.add(1, 2)
-```
-
-
-[FAQ]: http://pybind11.rtfd.io/en/latest/faq.html#working-with-ancient-visual-studio-2009-builds-on-windows
-[vs2015_runtime]: https://www.microsoft.com/en-us/download/details.aspx?id=48145
+[FAQ]: 

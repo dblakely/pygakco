@@ -8,6 +8,8 @@ from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 from distutils.version import LooseVersion
 
+with open('README.md') as f:
+    long_description = f.read()
 
 class CMakeExtension(Extension):
     def __init__(self, name, sourcedir=''):
@@ -57,13 +59,13 @@ class CMakeBuild(build_ext):
         subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=self.build_temp)
 
 setup(
-    name='cmake_example',
-    version='0.0.1',
-    author='Dean Moldovan',
-    author_email='dean0x7d@gmail.com',
-    description='A test project using pybind11 and CMake',
-    long_description='',
-    ext_modules=[CMakeExtension('cmake_example')],
+    name='igakco-test',
+    version='1.0.5',
+    author='Derrick Blakely, Eamon Collins',
+    author_email='dcb7xz@virginia.edu',
+    description='PyPi Package for the iGakco SVM algorithm',
+    long_description=long_description,
+    ext_modules=[CMakeExtension('igakco')],
     cmdclass=dict(build_ext=CMakeBuild),
     zip_safe=False,
 )
