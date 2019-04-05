@@ -29,7 +29,11 @@ pip install -i https://test.pypi.org/simple/ igakco-test
 Currently, this may only work on Macs because (1) I'm developing on a Mac and (2) because there's a large diversity of Linux OSs, getting it to work on Linux machines is more involved (Eamon and I _have_ created working Linux wheels several times, but because it's more difficult, we're updating the igakco-test Linux wheel less often).
 
 **From source**
-Download and extract the igakco tarball. From the directory above the `igakco` folder, run:
+Clone this repository:
+```
+git clone --recursive https://github.com/dblakely/pygakco.git
+```
+The `--recursive` flag is to make sure the Pybind11 library is cloned as well. Then run:
 `pip install ./igakco`
 or
 `pip3 install ./igakco`
