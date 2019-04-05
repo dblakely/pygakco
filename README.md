@@ -29,6 +29,7 @@ pip install -i https://test.pypi.org/simple/ igakco-test
 Currently, this may only work on Macs because (1) I'm developing on a Mac and (2) because there's a large diversity of Linux OSs, getting it to work on Linux machines is more involved (Eamon and I _have_ created working Linux wheels several times, but because it's more difficult, we're updating the igakco-test Linux wheel less often).
 
 **From source**
+
 Clone this repository:
 ```
 git clone --recursive https://github.com/dblakely/pygakco.git
