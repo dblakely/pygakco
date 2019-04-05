@@ -1,11 +1,9 @@
-# igakco for pybind11
+# iGakco-SVM Python Package
 
 [![Build Status](https://travis-ci.org/pybind/igakco.svg?branch=master)](https://travis-ci.org/pybind/igakco)
 [![Build status](https://ci.appveyor.com/api/projects/status/57nnxfm4subeug43/branch/master?svg=true)](https://ci.appveyor.com/project/dean0x7d/cmake-example/branch/master)
 
-An example [pybind11](https://github.com/pybind/pybind11) module built with a
-CMake-based build system. This is useful for C++ codebases that have an existing
-CMake project structure.
+A software package for the iGakco-SVM algorithm. It uses [pybind11](https://github.com/pybind/pybind11) to provide a Python interface to the C++ backend. SVM optimization is performed with LIBSVM.
 
 
 ## Prerequisites
@@ -21,12 +19,11 @@ CMake project structure.
 * CMake >= 3.1
 
 
-## Installation
+## Installation (Linux and MacOS)
 **With pip**
 ```
 pip install -i https://test.pypi.org/simple/ igakco-test
 ```
-Currently, this may only work on Macs because (1) I'm developing on a Mac and (2) because there's a large diversity of Linux OSs, getting it to work on Linux machines is more involved (Eamon and I _have_ created working Linux wheels several times, but because it's more difficult, we're updating the igakco-test Linux wheel less often).
 
 **From source**
 
@@ -35,8 +32,11 @@ Clone this repository:
 git clone --recursive https://github.com/dblakely/pygakco.git
 ```
 The `--recursive` flag is to make sure the Pybind11 library is cloned as well. Then run:
+
 `pip install ./igakco`
+
 or
+
 `pip3 install ./igakco`
 
 ## Tutorial
@@ -75,7 +75,7 @@ Predict:
 Pybind11 requires a C++11 compliant compiler, i.e Visual Studio 2015 on Windows.
 This applies to all Python versions, including 2.7. Unlike regular C extension
 modules, it's perfectly fine to compile a pybind11 module with a VS version newer
-than the target Python's VS version. See the [FAQ] for more details.
+than the target Python's VS version.
 
 **Runtime requirements**
 

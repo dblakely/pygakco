@@ -65,6 +65,7 @@ setup(
     author_email='dcb7xz@virginia.edu',
     description='PyPi Package for the iGakco SVM algorithm',
     long_description=long_description,
+    long_description_content_type='text/markdown',
     ext_modules=[CMakeExtension('igakco')],
     cmdclass=dict(build_ext=CMakeBuild),
     zip_safe=False,
