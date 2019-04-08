@@ -4,6 +4,7 @@
 #include <map>
 #include <iostream>
 #include <fstream>
+#include <vector>
 #include <assert.h>
 #include <string.h>
 #include <algorithm>
@@ -89,7 +90,7 @@ Dataset::Dataset(std::string filename, bool is_test_set, char *dict, std::string
 }
 
 void Dataset::collect_data(bool quiet) {
-	filename = this->filename;
+	std::string filename = this->filename;
 	// matrix of numerical sequences
 	const char *seq;
 	// the dictionary
@@ -138,14 +139,13 @@ void Dataset::collect_data(bool quiet) {
                 isLabel = true;
                 //allocate more space every 1000 strings after 15k
                 if(row >= MAXNSTR && row % 1000 == 0){
-                  realls++;
-                  this->S = (int**)realloc(this->S, (MAXNSTR + 1000*realls)*sizeof(int*));
-                  this->seqLengths = (int*)realloc(this->seqLengths, (MAXNSTR + 1000*realls)*sizeof(int));
-                  this->seqLabels = (int*)realloc(this->seqLabels, (MAXNSTR + 1000*realls)*sizeof(int));
+                    realls++;
+                    this->S = (int**)realloc(this->S, (MAXNSTR + 1000*realls)*sizeof(int*));
+                    this->seqLengths = (int*)realloc(this->seqLengths, (MAXNSTR + 1000*realls)*sizeof(int));
+                    this->seqLabels = (int*)realloc(this->seqLabels, (MAXNSTR + 1000*realls)*sizeof(int));
                 }
             }
         }
-
     }
     //final realloc to relieve memory waste
     this->S = (int**) realloc(this->S, row*sizeof(int*));
@@ -254,4 +254,67 @@ void Dataset::free_strings() {
     }
     free(this->seqLengths);
     free(this->S);
+}
+
+ArrayDataset::ArrayDataset(std::vector<std::string> sequences, std::vector<int> labels) {
+    this->sequences = sequences;
+    this->labels = labels;
+    this->n_str = sequences.size();
+    assert(sequences.size() == labels.size());
+}
+
+void ArrayDataset::read_data() {
+    char* D;
+    std::string sequence;
+    //set int equal to 1 when we encounter a unique char
+    std::map<char, int> dictmap;
+
+    for (auto iter = this->sequences.begin(); iter != this->sequences.end(); iter++) {
+        std::string str = *iter;
+        int length = str.length();
+        if (length < this->minlen) {
+            this->minlen = length;
+        }
+        if (length > this->maxlen) {
+            this->maxlen = length;
+        }
+        this->seqLengths.push_back(length);
+        for (int i = 0; i < length; i++){
+            if (dictmap[toupper(str[i])] > 0)
+                dictmap[toupper(str[i])]++;
+            else
+                dictmap[toupper(str[i])] = 1;
+        }
+    }
+    int i = 0;
+    D = (char*) malloc(140 * sizeof(char));
+    for (std::map<char, int>::iterator it = dictmap.begin(); it != dictmap.end(); it++) {
+        D[i] = it->first;
+        i++;
+    }
+    D[i] = '\0';
+    this->dictionarySize = i + 1;
+    D = (char*) realloc(D, (i + 1) * sizeof(char));
+    this->dict = D;
+}
+
+void ArrayDataset::numericize_seqs() {
+    const int n_str = this->n_str;
+    printf("n_str = %d\n", n_str);
+    this->S = (int **) malloc(n_str * sizeof(int *));
+    const char *seq;
+    for (int i = 0; i < n_str; i++) {
+        std::string str = this->sequences[i];
+        int length = this->seqLengths[i];
+        seq = str.c_str();
+        this->S[i] = string_replace(seq, this->dict, this->seqLengths[i]);
+    }
+}
+
+TestArrayDataset::TestArrayDataset(std::vector<std::string> sequences, std::vector<int> labels, char *dict) 
+        : ArrayDataset(sequences, labels) {
+    char *copy = (char *) malloc((strlen(dict) + 1) * sizeof(char));
+    strcpy(copy, dict);
+    this->dict = copy;
+    this->dictionarySize = strlen(this->dict);
 }

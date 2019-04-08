@@ -42,6 +42,9 @@ public:
 	void fit(std::string train_file, std::string test_file, 
 		std::string dict, bool quiet, std::string kernel_file);
 	void predict(std::string predictions_file);
+	void fit_from_arrays(std::vector<std::string> Xtrain, std::vector<int> Ytrain,
+		std::vector<std::string> Xtest, std::vector<int> Ytest, 
+		std::string kernel_file);
 };
 
 #endif

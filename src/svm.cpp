@@ -10,6 +10,8 @@
 #include <string.h>
 #include <assert.h>
 #include <thread>
+#include <vector>
+#include <iostream>
 
 #define Malloc(type,n) (type *)malloc((n)*sizeof(type))
 
@@ -61,10 +63,10 @@ void SVM::fit(std::string train_file, std::string test_file,
 
 	assert(train_data->dictionarySize == test_data->dictionarySize);
 
-	if (g > train_data->minlen) {
+	if (this->g > train_data->minlen) {
 		g_greater_than_shortest_err(g, train_data->minlen, train_file);
 	}
-	if (g > test_data->minlen) {
+	if (this->g > test_data->minlen) {
 		g_greater_than_shortest_err(g, test_data->minlen, test_file);
 	}
 	
@@ -168,6 +170,126 @@ void SVM::fit(std::string train_file, std::string test_file,
 	struct svm_model *model;
 	model = train_model(K, labels, &params, svm_param);
 	this->model = model;
+}
+
+void SVM::fit_from_arrays(std::vector<std::string> Xtrain, 
+		std::vector<int> Ytrain,
+		std::vector<std::string> Xtest,
+		std::vector<int> Ytest,
+		std::string kernel_file) {
+	for (auto iter = Xtrain.begin(); iter != Xtrain.end(); iter++) {
+		std::string str = *iter;
+		std::cout << str << std::endl;
+	}
+	for (auto iter = Ytrain.begin(); iter != Ytrain.end(); iter++) {
+		int label = *iter;
+		std::cout << label << std::endl;
+	}
+	auto train_data = new ArrayDataset(Xtrain, Ytrain);
+	train_data->read_data();
+    train_data->numericize_seqs();
+    char *dict = train_data->dict;
+    auto test_data = new TestArrayDataset(Xtest, Ytest, dict);
+    test_data->read_data();
+    test_data->numericize_seqs();
+
+    if (this->g > train_data->minlen) {
+		throw std::runtime_error("g must be less than the shortest training sequence\n");
+	}
+	if (this->g > test_data->minlen) {
+		throw std::runtime_error("g must be less than the shortest test sequence\n");
+	}
+
+	long int maxlen_train = train_data->maxlen;
+	long int maxlen_test = test_data->maxlen;
+	long int minlen_train = train_data->minlen;
+	long int minlen_test = test_data->minlen;
+	long int n_str_train = train_data->n_str;
+	long int n_str_test = test_data->n_str;
+	long int total_str = n_str_train + n_str_test;
+
+	this->n_str_train = n_str_train;
+	this->n_str_test = n_str_test;
+	this->test_labels = test_data->labels.data();
+
+	int **S = (int **) malloc(total_str * sizeof(int*));
+	int *seq_lengths = (int *) malloc(total_str * sizeof(int));
+	int *labels = (int *) malloc(total_str * sizeof(int));
+
+	int *train_labels = train_data->labels.data();
+	int *train_lengths = train_data->seqLengths.data();
+	int *test_labels = test_data->labels.data();
+	int *test_lengths = test_data->seqLengths.data();	
+
+	// copy references to train strings
+	memcpy(S, train_data->S, n_str_train * sizeof(int*));
+	memcpy(seq_lengths, train_lengths, n_str_train * sizeof(int));
+	memcpy(labels, train_labels, n_str_train * sizeof(int));
+
+	// copy the references to the test strings
+	memcpy(&S[n_str_train], test_data->S, n_str_test * sizeof(int*));
+	memcpy(&seq_lengths[n_str_train], test_lengths, n_str_test * sizeof(int));
+	memcpy(&labels[n_str_train], test_labels, n_str_test * sizeof(int));
+	
+	/*Extract g-mers*/
+	Features* features = extractFeatures(S, seq_lengths, total_str, g);
+	int nfeat = (*features).n;
+	int *feat = (*features).features;
+	if(!this->quiet)
+		printf("g = %d, k = %d, %d features\n", this->g, this->k, nfeat); 
+
+	//now we can free the strings because we have the features
+
+	kernel_params params;
+	params.g = g;
+	params.k = k;
+	params.m = m;
+	params.n_str_train = n_str_train;
+	params.n_str_test = n_str_test;
+	params.total_str = total_str;
+	params.n_str_pairs = (total_str / 2) * (total_str + 1);
+	params.features = features;
+	params.dict_size = train_data->dictionarySize;
+	params.num_threads = this->num_threads;
+	params.num_mutex = this->num_mutex;
+	params.quiet = quiet;
+
+	/* Compute the kernel matrix */
+	double *K = construct_kernel(&params);
+	this->kernel = K;
+	
+	/* Write kernel matrix to disk if user provided a file name */
+	if (!kernel_file.empty()) {
+		printf("Writing kernel to %s...\n", kernel_file.c_str());
+		FILE *kernelfile = fopen(kernel_file.c_str(), "w");
+		for (int i = 0; i < total_str; ++i) {
+			for (int j = 0; j < total_str; ++j) {
+				fprintf(kernelfile, "%d:%e ", j + 1, tri_access(K,i,j));
+			}
+			fprintf(kernelfile, "\n");
+		}
+		fclose(kernelfile);
+	}
+
+	/* Train model */
+	struct svm_parameter* svm_param = Malloc(svm_parameter, 1);
+	svm_param->svm_type = this->svm_type;
+	svm_param->kernel_type = this->kernel_type;
+	svm_param->nu = this->nu;
+	svm_param->cache_size = this->cache_size;
+	svm_param->C = this->C;
+	svm_param->nr_weight = this->nr_weight;
+	svm_param->weight_label = this->weight_label;
+	svm_param->weight = this->weight;
+	svm_param->shrinking = this->h;
+	svm_param->probability = this->probability;
+	svm_param->eps = this->eps;
+	svm_param->degree = 0;
+
+	struct svm_model *model;
+	model = train_model(K, labels, &params, svm_param);
+	this->model = model;
+
 }
 
 void SVM::predict(std::string predictions_file) {
