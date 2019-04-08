@@ -49,6 +49,20 @@ svm.predict("predictions.txt")
 ```
 This will use the provided parameters to build train and test kernel matrices and train an SVM classifier. The `predict` call will write the predicted labels of the provided `test_file` to `predictions.txt`.
 
+Alternatively, we can train by feeding in arrays of sequences and labels:
+```
+from igakco import SVM
+
+xtrain = ["ACACA", "AAACA"]
+ytrain = [1, 0]
+xtest = ["AAAAA", "ACACA"]
+ytest = [1, 0]
+
+svm = SVM(g=7, m=5, C=0.7)
+svm.fit_from_arrays(xtrain, ytrain, xtest, ytest, "kernel.txt")
+svm.predict("preds.txt")
+```
+
 ## Documentation
 Constructor:
 * `g` (required)
