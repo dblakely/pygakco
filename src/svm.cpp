@@ -309,7 +309,9 @@ void SVM::predict(std::string predictions_file) {
 	int pagg = 0, nagg = 0;
 	double* neg = Malloc(double, n_str_test);
 	double* pos = Malloc(double, n_str_test);
+
 	int fp = 0, fn = 0; //counters for false postives and negatives
+	int tp = 0, tn = 0; //counters for true postives and negatives
 	int labelind = 0;
 	for (int i =0; i < 2; i++){
 		if (this->model->label[i] == 1)
@@ -342,34 +344,50 @@ void SVM::predict(std::string predictions_file) {
 			x[n_str_train].index = -1;
 		}
 
+		// this will be [prob_pos, prob_neg], not [prob_neg, prob_pos]
 		double probs[2];
 		double guess = svm_predict_probability(this->model, x, probs);
+
 		if (test_labels[i] > 0) {
 			pos[pagg] = probs[labelind];
 			pagg += 1;
-			if (guess < 0)
+			if (guess < 0) {
 				fn++;
+			} else {
+				tp++;
+			}
 		} else {
 			neg[nagg] = probs[labelind];
 			nagg += 1;
-			if (guess > 0)
+			if (guess > 0) {
 				fp++;
+			} else {
+				tn++;
+			}
 		}
 
 		fprintf(labelfile, "%d\n", (int)guess);
 		//printf("guess = %f and test_labels[%d] = %d\n", guess, i, test_labels[i]);
-		if ((guess < 0.0 && test_labels[i] < 0) || (guess > 0.0 && test_labels[i] > 0)){
+		if ((guess < 0.0 && test_labels[i] < 0) || (guess > 0.0 && test_labels[i] > 0)) {
 			correct++;
 		}
 	}
-	printf("\nAccuracy: %f\n", (double)correct / n_str_test);
+
+	double tpr = tp / (double) pagg;
+	double tnr = tn / (double) nagg;
+	double fnr = fn / (double) pagg;
+	double fpr = fp / (double) nagg;
 	double auc = calculate_auc(pos, neg, pagg, nagg);
-	printf("auc: %f\n", auc);
 	if (!this->quiet) {
-		printf("false positive: %d\tfn: %d\n", fp, fn);
-		printf("num positive: %d\n", pagg);
-		printf("percent positive: %f\n", ((double)pagg/(nagg+pagg)));
+		printf("Num sequences: %d\n", nagg + pagg);
+		printf("Num positive: %d, Num negative: %d\n", pagg, nagg);
+		printf("TPR: %f\n", tpr);
+		printf("TNR: %f\n", tnr);
+		printf("FNR: %f\n", fnr);
+		printf("FPR: %f\n", fpr);
 	}
+	printf("\nAccuracy: %f\n", (double) correct / n_str_test);
+	printf("AUROC: %f\n", auc);
 }
 
 void SVM::toString() {

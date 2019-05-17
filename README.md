@@ -1,9 +1,9 @@
-# iGakco-SVM Python Package
+# PyGakco: Fast and Easy Sequence Analysis
 
 [![Build Status](https://travis-ci.org/pybind/igakco.svg?branch=master)](https://travis-ci.org/pybind/igakco)
 [![Build status](https://ci.appveyor.com/api/projects/status/57nnxfm4subeug43/branch/master?svg=true)](https://ci.appveyor.com/project/dean0x7d/cmake-example/branch/master)
 
-A software package for the iGakco-SVM algorithm. It uses [pybind11](https://github.com/pybind/pybind11) to provide a Python interface to the C++ backend. SVM optimization is performed with LIBSVM.
+A Python package for training SVM classifiers for sequence analysis. Build with the iGakco gapped k-mer algorithm, [pybind11](https://github.com/pybind/pybind11), and [LIBSVM](https://github.com/cjlin1/libsvm).
 
 
 ## Prerequisites
@@ -33,17 +33,17 @@ git clone --recursive https://github.com/dblakely/pygakco.git
 ```
 The `--recursive` flag is to make sure the Pybind11 library is cloned as well. Then run:
 
-`pip install ./igakco`
+`pip install ./pygakco`
 
 or
 
-`pip3 install ./igakco`
+`pip3 install ./pygakco`
 
 ## Tutorial
 Example usage:
 ```
 from igakco import SVM
-svm = SVM(g=7, m=5, C=0.7)
+svm = SVM(g=7, m=2, C=0.7)
 svm.fit(train_file="1.1.train.fasta", test_file="1.1.test.fasta", quiet=False, kernel_file="output.txt")
 svm.predict("predictions.txt")
 ```
@@ -58,7 +58,7 @@ ytrain = [1, 0]
 xtest = ["AAAAA", "ACACA"]
 ytest = [1, 0]
 
-svm = SVM(g=7, m=5, C=0.7)
+svm = SVM(g=3, m=2, C=0.7)
 svm.fit_from_arrays(xtrain, ytrain, xtest, ytest, "kernel.txt")
 svm.predict("preds.txt")
 ```

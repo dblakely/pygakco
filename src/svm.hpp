@@ -5,6 +5,7 @@
 #include "libsvm-code/libsvm.h"
 #include <string>
 #include <cstdlib>
+#include <vector>
 
 class SVM {
 public:
