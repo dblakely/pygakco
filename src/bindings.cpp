@@ -63,9 +63,11 @@ PYBIND11_MODULE(igakco, m) {
             int* test_ptr = static_cast<int *>(test_info.ptr);
             std::vector<int> ytest_vec(test_ptr, test_ptr + y_test_len);
 
-            
             return self.fit_from_arrays(xtrain_vec, ytrain_vec, xtest_vec, ytest_vec, kernel_file);
-        });
+        })
+        .def("score", 
+            &SVM::score, 
+            py::arg("metric")="accuracy");
 
 #ifdef VERSION_INFO
     m.attr("__version__") = VERSION_INFO;

@@ -12,6 +12,7 @@
 #include <thread>
 #include <vector>
 #include <iostream>
+#include <stdexcept>
 
 #define Malloc(type,n) (type *)malloc((n)*sizeof(type))
 
@@ -290,6 +291,110 @@ void SVM::fit_from_arrays(std::vector<std::string> Xtrain,
 	model = train_model(K, labels, &params, svm_param);
 	this->model = model;
 
+}
+
+double SVM::score(std::string metric) {
+	if (metric != "accuracy" && metric != "auc") {
+		throw std::invalid_argument("metric argument must be 'accuracy' or 'auc'");
+	}
+	int n_str = this->total_str;
+	int n_str_train = this->n_str_train;
+	int n_str_test = this->n_str_test;
+	printf("Predicting labels for %d sequences...\n", n_str_test);
+	double *test_K = construct_test_kernel(n_str_train, n_str_test, this->kernel);
+	int *test_labels = this->test_labels;
+	printf("Test kernel constructed...\n");
+
+	int num_sv = this->model->nSV[0] + this->model->nSV[1];
+	printf("num_sv = %d\n", num_sv);
+	struct svm_node *x = Malloc(struct svm_node, n_str_train + 1);
+	int correct = 0;
+	// aggregators for finding num of pos and neg samples for auc
+	int pagg = 0, nagg = 0;
+	double* neg = Malloc(double, n_str_test);
+	double* pos = Malloc(double, n_str_test);
+
+	int fp = 0, fn = 0; //counters for false postives and negatives
+	int tp = 0, tn = 0; //counters for true postives and negatives
+	int labelind = 0;
+	for (int i =0; i < 2; i++){
+		if (this->model->label[i] == 1)
+			labelind = i;
+	}
+
+	int svcount = 0;
+	for (int i = 0; i < n_str_test; i++) {
+		if (this->kernel_type == GAKCO) {
+			for (int j = 0; j < n_str_train; j++){
+				x[j].index = j + 1;
+				x[j].value = 0;
+			}
+			svcount = 0;
+			for (int j = 0; j < n_str_train; j++){
+				if (j == this->model->sv_indices[svcount] - 1){
+					x[j].value = test_K[i * num_sv + svcount];
+					svcount++;
+				}
+			}
+			x[n_str_train].index = -1;
+		} else if (this->kernel_type == LINEAR || this->kernel_type == RBF) {
+			for (int j = 0; j < n_str_train; j++){
+				x[j].index = j + 1;
+				x[j].value = test_K[i * n_str_train + j];
+			}
+			x[n_str_train].index = -1;
+		}
+
+		// this will be [prob_pos, prob_neg], not [prob_neg, prob_pos]
+		double probs[2];
+		double guess = svm_predict_probability(this->model, x, probs);
+
+		if (test_labels[i] > 0) {
+			pos[pagg] = probs[labelind];
+			pagg += 1;
+			if (guess < 0) {
+				fn++;
+			} else {
+				tp++;
+			}
+		} else {
+			neg[nagg] = probs[labelind];
+			nagg += 1;
+			if (guess > 0) {
+				fp++;
+			} else {
+				tn++;
+			}
+		}
+
+		//printf("guess = %f and test_labels[%d] = %d\n", guess, i, test_labels[i]);
+		if ((guess < 0.0 && test_labels[i] < 0) || (guess > 0.0 && test_labels[i] > 0)) {
+			correct++;
+		}
+	}
+
+	double tpr = tp / (double) pagg;
+	double tnr = tn / (double) nagg;
+	double fnr = fn / (double) pagg;
+	double fpr = fp / (double) nagg;
+	double auc = calculate_auc(pos, neg, pagg, nagg);
+	double acc = correct / (double)  n_str_test;
+	if (!this->quiet) {
+		printf("Num sequences: %d\n", nagg + pagg);
+		printf("Num positive: %d, Num negative: %d\n", pagg, nagg);
+		printf("TPR: %f\n", tpr);
+		printf("TNR: %f\n", tnr);
+		printf("FNR: %f\n", fnr);
+		printf("FPR: %f\n", fpr);
+	}
+	printf("\nAccuracy: %f\n", acc);
+	printf("AUROC: %f\n", auc);
+
+	if (metric == "accuracy") {
+		return acc;
+	}
+	
+	return auc;
 }
 
 void SVM::predict(std::string predictions_file) {

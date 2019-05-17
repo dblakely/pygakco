@@ -46,6 +46,7 @@ public:
 	void fit_from_arrays(std::vector<std::string> Xtrain, std::vector<int> Ytrain,
 		std::vector<std::string> Xtest, std::vector<int> Ytest, 
 		std::string kernel_file);
+	double score(std::string metric);
 };
 
 #endif
