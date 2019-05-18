@@ -3,7 +3,7 @@
 #include "dataset.hpp"
 #include "shared.h"
 #include "libsvm-code/libsvm.h"
-
+#include "libsvm-code/eval.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
@@ -40,6 +40,115 @@ SVM::SVM(int g, int m, double C, double nu, double eps,
 			exit(1);
 		}
 	}
+}
+
+double SVM::cv(std::string train_file, int num_fold, std::string metric) {
+	if (metric != "accuracy" && metric != "auc") {
+		throw std::invalid_argument("metric argument must be 'accuracy' or 'auc'");
+	}
+
+	this->quiet = quiet;
+	int g = this->g;
+	int k = this->k;
+	int m = this->m;
+
+	auto train_data = new Dataset(train_file, false, NULL, "");
+	train_data->collect_data(this->quiet);
+
+	if (this->g > train_data->minlen) {
+		g_greater_than_shortest_err(g, train_data->minlen, train_file);
+	}
+
+	long int maxlen_train = train_data->maxlen;
+	long int minlen_train = train_data->minlen;
+	long int n_str_train = train_data->nStr;
+	long int total_str = n_str_train;
+
+	this->n_str_train = n_str_train;
+
+	int **S = (int **) malloc(total_str * sizeof(int*));
+	int *seq_lengths = (int *) malloc(total_str * sizeof(int));
+	int *labels = (int *) malloc(total_str * sizeof(int));
+
+	// copy references to train strings
+	memcpy(S, train_data->S, n_str_train * sizeof(int*));
+	memcpy(seq_lengths, train_data->seqLengths, n_str_train * sizeof(int));
+	memcpy(labels, train_data->seqLabels, n_str_train * sizeof(int));
+
+	
+	/*Extract g-mers*/
+	Features* features = extractFeatures(S, seq_lengths, total_str, g);
+	int nfeat = (*features).n;
+	int *feat = (*features).features;
+	if(!this->quiet)
+		printf("g = %d, k = %d, %d features\n", this->g, this->k, nfeat);
+
+	//now we can free the strings because we have the features
+	train_data->free_strings();
+
+	kernel_params params;
+	params.g = g;
+	params.k = k;
+	params.m = m;
+	params.n_str_train = n_str_train;
+	params.n_str_test = 0;
+	params.total_str = total_str;
+	params.n_str_pairs = (total_str / 2) * (total_str + 1);
+	params.features = features;
+	params.dict_size = train_data->dictionarySize;
+	params.num_threads = this->num_threads;
+	params.num_mutex = this->num_mutex;
+	params.quiet = quiet;
+
+	/* Compute the kernel matrix */
+	double *K = construct_kernel(&params);
+	this->kernel = K;
+
+	std::string kernel_file = "kernel_cv.txt";
+	printf("Writing kernel to %s...\n", kernel_file.c_str());
+	FILE *kernelfile = fopen(kernel_file.c_str(), "w");
+	for (int i = 0; i < total_str; ++i) {
+		for (int j = 0; j < total_str; ++j) {
+			fprintf(kernelfile, "%d:%e ", j + 1, tri_access(K,i,j));
+		}
+		fprintf(kernelfile, "\n");
+	}
+	fclose(kernelfile);
+
+	/* Train model */
+	struct svm_parameter* svm_param = Malloc(svm_parameter, 1);
+	svm_param->svm_type = this->svm_type;
+	svm_param->kernel_type = this->kernel_type;
+	svm_param->nu = this->nu;
+	svm_param->cache_size = this->cache_size;
+	svm_param->C = this->C;
+	svm_param->nr_weight = this->nr_weight;
+	svm_param->weight_label = this->weight_label;
+	svm_param->weight = this->weight;
+	svm_param->shrinking = this->h;
+	svm_param->probability = this->probability;
+	svm_param->eps = this->eps;
+	svm_param->degree = 0;
+
+	svm_problem *prob = create_svm_problem(K, labels, &params, svm_param);
+
+	printf("performing cv\n");
+
+	// the eval.cpp file is set to return AUC
+	double cv_result = binary_class_cross_validation(prob, svm_param, num_fold);
+	printf("Cross Validation = %g%%\n", 100.0 * cv_result);
+
+	printf("l = %d\n", prob->l);
+
+	int acc = 0;
+	int auc = 0;
+
+	if (metric == "auc") {
+		return auc;
+	}
+	
+	return acc;
+
 }
 
 void SVM::fit(std::string train_file, std::string test_file, 
@@ -168,8 +277,10 @@ void SVM::fit(std::string train_file, std::string test_file,
 	svm_param->eps = this->eps;
 	svm_param->degree = 0;
 
-	struct svm_model *model;
-	model = train_model(K, labels, &params, svm_param);
+	svm_problem *prob = create_svm_problem(K, labels, &params, svm_param);
+
+	struct svm_model* model;
+	model = svm_train(prob, svm_param);
 	this->model = model;
 }
 
@@ -390,11 +501,11 @@ double SVM::score(std::string metric) {
 	printf("\nAccuracy: %f\n", acc);
 	printf("AUROC: %f\n", auc);
 
-	if (metric == "accuracy") {
-		return acc;
+	if (metric == "auc") {
+		return auc;
 	}
 	
-	return auc;
+	return acc;
 }
 
 void SVM::predict(std::string predictions_file) {

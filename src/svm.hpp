@@ -15,7 +15,7 @@ public:
 	int num_threads = -1;
 	int num_mutex = -1;
 	int svm_type = C_SVC;
-	int kernel_type = LINEAR; // must be LINEAR, GAKCO, or RBF
+	int kernel_type = GAKCO; // must be LINEAR, GAKCO, or RBF
 	std::string kernel_type_name;
 	double C; //C param
 	double nu; //nu for nu-SVC
@@ -47,6 +47,7 @@ public:
 		std::vector<std::string> Xtest, std::vector<int> Ytest, 
 		std::string kernel_file);
 	double score(std::string metric);
+	double cv(std::string train_file, int num_fold, std::string metric);
 };
 
 #endif

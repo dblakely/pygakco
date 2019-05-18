@@ -67,6 +67,11 @@ PYBIND11_MODULE(igakco, m) {
         })
         .def("score", 
             &SVM::score, 
+            py::arg("metric")="accuracy")
+        .def("cv", 
+            &SVM::cv,
+            py::arg("train_file"),
+            py::arg("num_fold")=7,
             py::arg("metric")="accuracy");
 
 #ifdef VERSION_INFO
