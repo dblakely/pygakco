@@ -33,6 +33,7 @@ void kernel_build_parallel(int tid, WorkItem *workQueue, int queueSize,
 
 	int num_comb = nchoosek(g, k);
 
+
 	// where this thread will store its work
 	unsigned int *Ks = (unsigned int *) malloc(n_str_pairs * sizeof(unsigned int));
 	memset(Ks, 0, sizeof(unsigned int) * n_str_pairs);
@@ -132,7 +133,6 @@ void kernel_build_parallel(int tid, WorkItem *workQueue, int queueSize,
 			Ksfinal[j1] += val;
 	}
 	pthread_mutex_unlock(&mutexes[num_mutex - 1]);
-
 	free(Ks);
 }
 
@@ -154,24 +154,28 @@ double* construct_kernel(kernel_params *params) {
 	memset(K, 0, params->n_str_pairs * sizeof(double));
 
 	/* Determine how many threads to use */
-	if (params->num_threads == -1) {
+	int num_threads = params->num_threads;
+	if (num_threads == -1) {
 		int numCores = std::thread::hardware_concurrency();
-		params->num_threads = (numCores > 20) ? 20 : numCores;
+		num_threads = (numCores > 20) ? 20 : numCores;
 	}
-	params->num_threads = (params->num_threads > queueSize) ? queueSize : params->num_threads;
+	num_threads = (num_threads > queueSize) ? queueSize : num_threads;
 
 	/* Create an array of mutex locks */
-	params->num_mutex = (-1 || params->num_mutex > params->num_threads) ? 
-		params->num_threads : params->num_mutex; 
-	pthread_mutex_t *mutexes = (pthread_mutex_t*) malloc(params->num_mutex * sizeof(pthread_mutex_t));
-	for (int i = 0; i < params->num_mutex; i++){
+	int num_mutex = params->num_mutex;
+	num_mutex = (num_mutex == -1 || num_mutex > num_threads) ? num_threads : num_mutex; 
+	pthread_mutex_t *mutexes = (pthread_mutex_t*) malloc(num_mutex * sizeof(pthread_mutex_t));
+	for (int i = 0; i < num_mutex; i++){
 		pthread_mutex_init(&mutexes[i], NULL);
 	}
 
+	params->num_threads = num_threads;
+	params->num_mutex = num_mutex;
+
 	/* Multithreaded kernel construction */
-	if (!params->quiet) printf("Computing kernel matrix using %d threads...\n", params->num_threads);
+	if (!params->quiet) printf("Computing kernel matrix using %d threads...\n", num_threads);
 	std::vector<std::thread> threads;
-	for (int tid = 0; tid < params->num_threads; tid++) {
+	for (int tid = 0; tid < num_threads; tid++) {
 		threads.push_back(std::thread(kernel_build_parallel, tid, workQueue, queueSize, mutexes, params, K));
 	}
 
@@ -212,9 +216,6 @@ double *run_cross_validation(double *K, std::string metric, int k) {
 svm_problem *create_svm_problem(double *K, int *labels, kernel_params *kernel_param, svm_parameter *svm_param) {
 	long int n_str = kernel_param->total_str;
 	long int n_str_train = kernel_param->n_str_train;
-
-	printf("n_str = %d\n", n_str);
-	printf("n_str_train = %d\n", n_str_train);
 
 	struct svm_problem* prob = Malloc(svm_problem, 1);
 	const char* error_msg;

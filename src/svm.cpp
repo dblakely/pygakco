@@ -3,7 +3,6 @@
 #include "dataset.hpp"
 #include "shared.h"
 #include "libsvm-code/libsvm.h"
-#include "libsvm-code/eval.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
@@ -42,60 +41,83 @@ SVM::SVM(int g, int m, double C, double nu, double eps,
 	}
 }
 
-double SVM::cv(std::string train_file, int num_fold, std::string metric) {
-	if (metric != "accuracy" && metric != "auc") {
-		throw std::invalid_argument("metric argument must be 'accuracy' or 'auc'");
+void SVM::fit_numerical(std::vector<std::vector<int> > Xtrain, 
+		std::vector<int> Ytrain, std::vector<std::vector<int> > Xtest,
+		std::vector<int> Ytest, int dictionarySize, 
+		std::string kernel_file) {
+	std::vector<int> lengths;
+
+	for (int i = 0; i < Xtrain.size(); i++) {
+		lengths.push_back(Xtrain[i].size());
 	}
-
-	this->quiet = quiet;
-	int g = this->g;
-	int k = this->k;
-	int m = this->m;
-
-	auto train_data = new Dataset(train_file, false, NULL, "");
-	train_data->collect_data(this->quiet);
-
-	if (this->g > train_data->minlen) {
-		g_greater_than_shortest_err(g, train_data->minlen, train_file);
+	for (int i = 0; i < Xtest.size(); i++) {
+		lengths.push_back(Xtest[i].size());
 	}
-
-	long int maxlen_train = train_data->maxlen;
-	long int minlen_train = train_data->minlen;
-	long int n_str_train = train_data->nStr;
-	long int total_str = n_str_train;
+	
+	long int n_str_train = Xtrain.size();
+	long int n_str_test = Xtest.size();
+	long int total_str = n_str_train + n_str_test;
 
 	this->n_str_train = n_str_train;
+	this->n_str_test = n_str_test;
 
 	int **S = (int **) malloc(total_str * sizeof(int*));
 	int *seq_lengths = (int *) malloc(total_str * sizeof(int));
 	int *labels = (int *) malloc(total_str * sizeof(int));
+	int *test_labels = (int *) malloc(n_str_test * sizeof(int));
 
 	// copy references to train strings
-	memcpy(S, train_data->S, n_str_train * sizeof(int*));
-	memcpy(seq_lengths, train_data->seqLengths, n_str_train * sizeof(int));
-	memcpy(labels, train_data->seqLabels, n_str_train * sizeof(int));
+	//memcpy(S, Xtrain.data(), n_str_train * sizeof(int*));
+	memcpy(labels, Ytrain.data(), n_str_train * sizeof(int));
 
+	// copy the references to the test strings
+	//memcpy(&S[n_str_train], Xtest.data(), n_str_test * sizeof(int*));
+	memcpy(&labels[n_str_train], Ytest.data(), n_str_test * sizeof(int));
+	memcpy(test_labels, Ytest.data(), n_str_test * sizeof(int));
+
+	this->test_labels = test_labels;
+
+	memcpy(seq_lengths, lengths.data(), lengths.size() * sizeof(int));
+
+	for (int i = 0; i < n_str_train; i++) {
+		S[i] = Xtrain[i].data();
+	}
+	for (int i = 0; i < n_str_test; i++) {
+		S[n_str_train + i] = Xtest[i].data();
+	}
+
+	for (int i = 0; i < total_str; i++) {
+		for (int j = 0; j < seq_lengths[i]; j++) {
+			printf("%d", S[i][j]);
+		}
+		printf("\n");
+	}
+	printf("seq_lengths:\n");
+	for (int i = 0; i < total_str; i++) {
+		printf("seq_lengths[%d] = %d\n", i, seq_lengths[i]);
+	}
+	printf("labels:\n");
+	for (int i = 0; i < total_str; i++) {
+		printf("labels[%d] = %d\n", i, labels[i]);
+	}
 	
 	/*Extract g-mers*/
 	Features* features = extractFeatures(S, seq_lengths, total_str, g);
 	int nfeat = (*features).n;
 	int *feat = (*features).features;
 	if(!this->quiet)
-		printf("g = %d, k = %d, %d features\n", this->g, this->k, nfeat);
-
-	//now we can free the strings because we have the features
-	train_data->free_strings();
+		printf("g = %d, k = %d, %d features\n", this->g, this->k, nfeat); 
 
 	kernel_params params;
 	params.g = g;
 	params.k = k;
 	params.m = m;
 	params.n_str_train = n_str_train;
-	params.n_str_test = 0;
+	params.n_str_test = n_str_test;
 	params.total_str = total_str;
-	params.n_str_pairs = (total_str / 2) * (total_str + 1);
+	params.n_str_pairs = (total_str/(double)2) * (total_str + 1);
 	params.features = features;
-	params.dict_size = train_data->dictionarySize;
+	params.dict_size = dictionarySize;
 	params.num_threads = this->num_threads;
 	params.num_mutex = this->num_mutex;
 	params.quiet = quiet;
@@ -104,22 +126,24 @@ double SVM::cv(std::string train_file, int num_fold, std::string metric) {
 	double *K = construct_kernel(&params);
 	this->kernel = K;
 
-	std::string kernel_file = "kernel_cv.txt";
-	printf("Writing kernel to %s...\n", kernel_file.c_str());
-	FILE *kernelfile = fopen(kernel_file.c_str(), "w");
-	for (int i = 0; i < total_str; ++i) {
-		for (int j = 0; j < total_str; ++j) {
-			fprintf(kernelfile, "%d:%e ", j + 1, tri_access(K,i,j));
+	/* Write kernel matrix to disk if user provided a file name */
+	if (!kernel_file.empty()) {
+		printf("Writing kernel to %s...\n", kernel_file.c_str());
+		FILE *kernelfile = fopen(kernel_file.c_str(), "w");
+		for (int i = 0; i < total_str; ++i) {
+			for (int j = 0; j < total_str; ++j) {
+				fprintf(kernelfile, "%d:%e ", j + 1, tri_access(K,i,j));
+			}
+			fprintf(kernelfile, "\n");
 		}
-		fprintf(kernelfile, "\n");
+		fclose(kernelfile);
 	}
-	fclose(kernelfile);
-
-	/* Train model */
+	
 	struct svm_parameter* svm_param = Malloc(svm_parameter, 1);
 	svm_param->svm_type = this->svm_type;
 	svm_param->kernel_type = this->kernel_type;
 	svm_param->nu = this->nu;
+	svm_param->gamma = 1 /(double) nfeat;
 	svm_param->cache_size = this->cache_size;
 	svm_param->C = this->C;
 	svm_param->nr_weight = this->nr_weight;
@@ -132,22 +156,9 @@ double SVM::cv(std::string train_file, int num_fold, std::string metric) {
 
 	svm_problem *prob = create_svm_problem(K, labels, &params, svm_param);
 
-	printf("performing cv\n");
-
-	// the eval.cpp file is set to return AUC
-	double cv_result = binary_class_cross_validation(prob, svm_param, num_fold);
-	printf("Cross Validation = %g%%\n", 100.0 * cv_result);
-
-	printf("l = %d\n", prob->l);
-
-	int acc = 0;
-	int auc = 0;
-
-	if (metric == "auc") {
-		return auc;
-	}
-	
-	return acc;
+	struct svm_model* model;
+	model = svm_train(prob, svm_param);
+	this->model = model;
 
 }
 
@@ -180,10 +191,6 @@ void SVM::fit(std::string train_file, std::string test_file,
 		g_greater_than_shortest_err(g, test_data->minlen, test_file);
 	}
 	
-	long int maxlen_train = train_data->maxlen;
-	long int maxlen_test = test_data->maxlen;
-	long int minlen_train = train_data->minlen;
-	long int minlen_test = test_data->minlen;
 	long int n_str_train = train_data->nStr;
 	long int n_str_test = test_data->nStr;
 	long int total_str = n_str_train + n_str_test;
@@ -205,8 +212,24 @@ void SVM::fit(std::string train_file, std::string test_file,
 	memcpy(&S[n_str_train], test_data->S, n_str_test * sizeof(int*));
 	memcpy(&seq_lengths[n_str_train], test_data->seqLengths, n_str_test * sizeof(int));
 	memcpy(&labels[n_str_train], test_data->seqLabels, n_str_test * sizeof(int));
-	
-	/*Extract g-mers*/
+
+	printf("string read: \n");
+
+	for (int i = 0; i < total_str; i++) {
+		for (int j = 0; j < seq_lengths[i]; j++) {
+			printf("%d", S[i][j]);
+		}
+		printf("\n");
+	}
+	printf("seq_lengths:\n");
+	for (int i = 0; i < total_str; i++) {
+		printf("seq_lengths[%d] = %d\n", i, seq_lengths[i]);
+	}
+	printf("labels:\n");
+	for (int i = 0; i < total_str; i++) {
+		printf("labels[%d] = %d\n", i, labels[i]);
+	}
+
 	Features* features = extractFeatures(S, seq_lengths, total_str, g);
 	int nfeat = (*features).n;
 	int *feat = (*features).features;
@@ -214,22 +237,8 @@ void SVM::fit(std::string train_file, std::string test_file,
 		printf("g = %d, k = %d, %d features\n", this->g, this->k, nfeat); 
 
 	//now we can free the strings because we have the features
-	train_data->free_strings();
-	test_data->free_strings();
-
-	//if this gakco is loading a kernel we don't need to calculate it
-	// Eamon, need to check with you about how this part works.
-	// Leaving it unimplemented for now
-	/*
-	if (this->loadkernel || this->loadmodel){
-		this->kernel_features = features;
-		this->nStr = nStr;
-		this->labels = label;
-		this->load_kernel(this->outputFilename);
-		gakco_kernel_matrix = this->kernel;//for the svm train to access it
-		return this->kernel;
-	}
-	*/
+	//train_data->free_strings();
+	//test_data->free_strings();
 
 	kernel_params params;
 	params.g = g;
@@ -238,18 +247,19 @@ void SVM::fit(std::string train_file, std::string test_file,
 	params.n_str_train = n_str_train;
 	params.n_str_test = n_str_test;
 	params.total_str = total_str;
-	params.n_str_pairs = (total_str / 2) * (total_str + 1);
+	params.n_str_pairs = (total_str/(double)2) * (total_str + 1);
 	params.features = features;
 	params.dict_size = train_data->dictionarySize;
 	params.num_threads = this->num_threads;
 	params.num_mutex = this->num_mutex;
 	params.quiet = quiet;
 
-	/* Compute the kernel matrix */
 	double *K = construct_kernel(&params);
 	this->kernel = K;
+
+
+	printf("fit: kernel constructed\n");
 	
-	/* Write kernel matrix to disk if user provided a file name */
 	if (!kernel_file.empty()) {
 		printf("Writing kernel to %s...\n", kernel_file.c_str());
 		FILE *kernelfile = fopen(kernel_file.c_str(), "w");
@@ -262,11 +272,11 @@ void SVM::fit(std::string train_file, std::string test_file,
 		fclose(kernelfile);
 	}
 
-	/* Train model */
 	struct svm_parameter* svm_param = Malloc(svm_parameter, 1);
 	svm_param->svm_type = this->svm_type;
 	svm_param->kernel_type = this->kernel_type;
 	svm_param->nu = this->nu;
+	svm_param->gamma = 1 /(double) nfeat;
 	svm_param->cache_size = this->cache_size;
 	svm_param->C = this->C;
 	svm_param->nr_weight = this->nr_weight;
@@ -279,8 +289,8 @@ void SVM::fit(std::string train_file, std::string test_file,
 
 	svm_problem *prob = create_svm_problem(K, labels, &params, svm_param);
 
-	struct svm_model* model;
-	model = svm_train(prob, svm_param);
+	struct svm_model *model;
+	model = train_model(K, labels, &params, svm_param);
 	this->model = model;
 }
 
@@ -289,6 +299,7 @@ void SVM::fit_from_arrays(std::vector<std::string> Xtrain,
 		std::vector<std::string> Xtest,
 		std::vector<int> Ytest,
 		std::string kernel_file) {
+	/*
 	for (auto iter = Xtrain.begin(); iter != Xtrain.end(); iter++) {
 		std::string str = *iter;
 		std::cout << str << std::endl;
@@ -297,13 +308,18 @@ void SVM::fit_from_arrays(std::vector<std::string> Xtrain,
 		int label = *iter;
 		std::cout << label << std::endl;
 	}
+	*/
 	auto train_data = new ArrayDataset(Xtrain, Ytrain);
 	train_data->read_data();
     train_data->numericize_seqs();
+
     char *dict = train_data->dict;
+
     auto test_data = new TestArrayDataset(Xtest, Ytest, dict);
     test_data->read_data();
     test_data->numericize_seqs();
+
+    assert(train_data->dictionarySize == test_data->dictionarySize);
 
     if (this->g > train_data->minlen) {
 		throw std::runtime_error("g must be less than the shortest training sequence\n");
@@ -359,7 +375,7 @@ void SVM::fit_from_arrays(std::vector<std::string> Xtrain,
 	params.n_str_train = n_str_train;
 	params.n_str_test = n_str_test;
 	params.total_str = total_str;
-	params.n_str_pairs = (total_str / 2) * (total_str + 1);
+	params.n_str_pairs = (total_str/(double)2) * (total_str + 1);
 	params.features = features;
 	params.dict_size = train_data->dictionarySize;
 	params.num_threads = this->num_threads;
@@ -388,6 +404,7 @@ void SVM::fit_from_arrays(std::vector<std::string> Xtrain,
 	svm_param->svm_type = this->svm_type;
 	svm_param->kernel_type = this->kernel_type;
 	svm_param->nu = this->nu;
+	svm_param->gamma = 1 /(double) nfeat;
 	svm_param->cache_size = this->cache_size;
 	svm_param->C = this->C;
 	svm_param->nr_weight = this->nr_weight;
@@ -456,7 +473,7 @@ double SVM::score(std::string metric) {
 			x[n_str_train].index = -1;
 		}
 
-		// this will be [prob_pos, prob_neg], not [prob_neg, prob_pos]
+		// probs = [prob_pos, prob_neg], not [prob_neg, prob_pos]
 		double probs[2];
 		double guess = svm_predict_probability(this->model, x, probs);
 

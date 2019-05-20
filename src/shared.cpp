@@ -59,7 +59,7 @@ double& tri_access(double* array, int i, int j) {
 		std::swap(i, j);
 	}
 	return array[i*(i+1)/2 + j];
-	}
+}
 
 unsigned int& tri_access(unsigned int* array, int i, int j, int N) {
 	if (j > i) {

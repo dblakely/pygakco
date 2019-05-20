@@ -1,6 +1,5 @@
 #include "dataset.hpp"
 #include "shared.h"
-
 #include <map>
 #include <iostream>
 #include <fstream>
@@ -72,7 +71,7 @@ Dataset::Dataset(std::string filename, bool is_test_set, char *dict, std::string
         char *copy = (char *) malloc((strlen(dict) + 1) * sizeof(char));
         strcpy(copy, dict);
         this->dict = copy;
-        this->dictionarySize = strlen(this->dict);
+        this->dictionarySize = strlen(this->dict) + 1;
     } else {
         if (this->dictFileName.empty()) {
             // if no dictionary provided, construct one from the input file
@@ -268,7 +267,6 @@ void ArrayDataset::read_data() {
     std::string sequence;
     //set int equal to 1 when we encounter a unique char
     std::map<char, int> dictmap;
-
     for (auto iter = this->sequences.begin(); iter != this->sequences.end(); iter++) {
         std::string str = *iter;
         int length = str.length();
@@ -296,6 +294,8 @@ void ArrayDataset::read_data() {
     this->dictionarySize = i + 1;
     D = (char*) realloc(D, (i + 1) * sizeof(char));
     this->dict = D;
+    printf("Dictionary: %s\n", this->dict);
+    printf("Size: %d (+1 for unknown character)\n", this->dictionarySize);
 }
 
 void ArrayDataset::numericize_seqs() {
@@ -311,8 +311,8 @@ void ArrayDataset::numericize_seqs() {
     }
 }
 
-TestArrayDataset::TestArrayDataset(std::vector<std::string> sequences, std::vector<int> labels, char *dict) 
-        : ArrayDataset(sequences, labels) {
+TestArrayDataset::TestArrayDataset(std::vector<std::string> sequences, 
+    std::vector<int> labels, char *dict) : ArrayDataset(sequences, labels) {
     char *copy = (char *) malloc((strlen(dict) + 1) * sizeof(char));
     strcpy(copy, dict);
     this->dict = copy;
