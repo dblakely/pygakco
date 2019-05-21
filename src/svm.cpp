@@ -85,21 +85,6 @@ void SVM::fit_numerical(std::vector<std::vector<int> > Xtrain,
 	for (int i = 0; i < n_str_test; i++) {
 		S[n_str_train + i] = Xtest[i].data();
 	}
-
-	for (int i = 0; i < total_str; i++) {
-		for (int j = 0; j < seq_lengths[i]; j++) {
-			printf("%d", S[i][j]);
-		}
-		printf("\n");
-	}
-	printf("seq_lengths:\n");
-	for (int i = 0; i < total_str; i++) {
-		printf("seq_lengths[%d] = %d\n", i, seq_lengths[i]);
-	}
-	printf("labels:\n");
-	for (int i = 0; i < total_str; i++) {
-		printf("labels[%d] = %d\n", i, labels[i]);
-	}
 	
 	/*Extract g-mers*/
 	Features* features = extractFeatures(S, seq_lengths, total_str, g);
@@ -213,23 +198,6 @@ void SVM::fit(std::string train_file, std::string test_file,
 	memcpy(&seq_lengths[n_str_train], test_data->seqLengths, n_str_test * sizeof(int));
 	memcpy(&labels[n_str_train], test_data->seqLabels, n_str_test * sizeof(int));
 
-	printf("string read: \n");
-
-	for (int i = 0; i < total_str; i++) {
-		for (int j = 0; j < seq_lengths[i]; j++) {
-			printf("%d", S[i][j]);
-		}
-		printf("\n");
-	}
-	printf("seq_lengths:\n");
-	for (int i = 0; i < total_str; i++) {
-		printf("seq_lengths[%d] = %d\n", i, seq_lengths[i]);
-	}
-	printf("labels:\n");
-	for (int i = 0; i < total_str; i++) {
-		printf("labels[%d] = %d\n", i, labels[i]);
-	}
-
 	Features* features = extractFeatures(S, seq_lengths, total_str, g);
 	int nfeat = (*features).n;
 	int *feat = (*features).features;
@@ -237,8 +205,8 @@ void SVM::fit(std::string train_file, std::string test_file,
 		printf("g = %d, k = %d, %d features\n", this->g, this->k, nfeat); 
 
 	//now we can free the strings because we have the features
-	//train_data->free_strings();
-	//test_data->free_strings();
+	train_data->free_strings();
+	test_data->free_strings();
 
 	kernel_params params;
 	params.g = g;
