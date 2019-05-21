@@ -3,6 +3,7 @@
 #include "dataset.hpp"
 #include "shared.h"
 #include "libsvm-code/libsvm.h"
+#include "libsvm-code/eval.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
@@ -10,6 +11,7 @@
 #include <assert.h>
 #include <thread>
 #include <vector>
+#include <set>
 #include <iostream>
 #include <stdexcept>
 
@@ -43,8 +45,7 @@ SVM::SVM(int g, int m, double C, double nu, double eps,
 
 void SVM::fit_numerical(std::vector<std::vector<int> > Xtrain, 
 		std::vector<int> Ytrain, std::vector<std::vector<int> > Xtest,
-		std::vector<int> Ytest, int dictionarySize, 
-		std::string kernel_file) {
+		std::vector<int> Ytest, std::string kernel_file) {
 	std::vector<int> lengths;
 
 	for (int i = 0; i < Xtrain.size(); i++) {
@@ -79,9 +80,16 @@ void SVM::fit_numerical(std::vector<std::vector<int> > Xtrain,
 
 	memcpy(seq_lengths, lengths.data(), lengths.size() * sizeof(int));
 
+	std::set<int> dict;
+	dict.insert(0);
 	for (int i = 0; i < n_str_train; i++) {
 		S[i] = Xtrain[i].data();
+		for (int j = 0; j < seq_lengths[i]; j++) {
+			dict.insert(Xtrain[i][j]);
+		}
 	}
+	int dictionarySize = dict.size();
+	printf("dictionarySize = %d\n", dictionarySize);
 	for (int i = 0; i < n_str_test; i++) {
 		S[n_str_train + i] = Xtest[i].data();
 	}
@@ -145,6 +153,101 @@ void SVM::fit_numerical(std::vector<std::vector<int> > Xtrain,
 	model = svm_train(prob, svm_param);
 	this->model = model;
 
+}
+
+double SVM::cv(std::vector<std::vector<int> > X, 
+		std::vector<int> Y, int num_folds) {
+	
+	long int n_str_train = X.size();
+	long int total_str = n_str_train;
+
+	std::vector<int> lengths;
+	for (int i = 0; i < n_str_train; i++) {
+		lengths.push_back(X[i].size());
+	}
+
+	this->n_str_train = n_str_train;
+
+	int **S = (int **) malloc(total_str * sizeof(int*));
+	int *seq_lengths = (int *) malloc(total_str * sizeof(int));
+	int *labels = (int *) malloc(total_str * sizeof(int));
+
+	memcpy(labels, Y.data(), n_str_train * sizeof(int));
+	memcpy(seq_lengths, lengths.data(), lengths.size() * sizeof(int));
+
+	// Convert sequences to int** and get dictionary size
+	std::set<int> dict;
+	dict.insert(0);
+	for (int i = 0; i < n_str_train; i++) {
+		S[i] = X[i].data();
+		for (int j = 0; j < seq_lengths[i]; j++) {
+			dict.insert(X[i][j]);
+		}
+	}
+
+	int dictionarySize = dict.size();
+	printf("dictionarySize = %d\n", dictionarySize);
+	
+	/*Extract g-mers*/
+	Features* features = extractFeatures(S, seq_lengths, total_str, g);
+	int nfeat = (*features).n;
+	int *feat = (*features).features;
+	if(!this->quiet)
+		printf("g = %d, k = %d, %d features\n", this->g, this->k, nfeat); 
+
+	kernel_params params;
+	params.g = g;
+	params.k = k;
+	params.m = m;
+	params.n_str_train = n_str_train;
+	params.n_str_test = 0;
+	params.total_str = total_str;
+	params.n_str_pairs = (total_str/(double)2) * (total_str + 1);
+	params.features = features;
+	params.dict_size = dictionarySize;
+	params.num_threads = this->num_threads;
+	params.num_mutex = this->num_mutex;
+	params.quiet = quiet;
+
+	/* Compute the kernel matrix */
+	double *K = construct_kernel(&params);
+	this->kernel = K;
+
+	/*
+	std::string kernel_file = "cv_kernel.txt";
+	if (!kernel_file.empty()) {
+		printf("Writing kernel to %s...\n", kernel_file.c_str());
+		FILE *kernelfile = fopen(kernel_file.c_str(), "w");
+		for (int i = 0; i < total_str; ++i) {
+			for (int j = 0; j < total_str; ++j) {
+				fprintf(kernelfile, "%d:%e ", j + 1, tri_access(K,i,j));
+			}
+			fprintf(kernelfile, "\n");
+		}
+		fclose(kernelfile);
+	}
+	*/
+	
+	struct svm_parameter* svm_param = Malloc(svm_parameter, 1);
+	svm_param->svm_type = this->svm_type;
+	svm_param->kernel_type = this->kernel_type;
+	svm_param->nu = this->nu;
+	svm_param->gamma = 1 /(double) nfeat;
+	svm_param->cache_size = this->cache_size;
+	svm_param->C = this->C;
+	svm_param->nr_weight = this->nr_weight;
+	svm_param->weight_label = this->weight_label;
+	svm_param->weight = this->weight;
+	svm_param->shrinking = this->h;
+	svm_param->probability = this->probability;
+	svm_param->eps = this->eps;
+	svm_param->degree = 0;
+
+	svm_problem *prob = create_svm_problem(K, labels, &params, svm_param);
+
+	double cv_auc = binary_class_cross_validation(prob, svm_param, 7);
+	
+	return cv_auc;
 }
 
 void SVM::fit(std::string train_file, std::string test_file, 
@@ -225,8 +328,6 @@ void SVM::fit(std::string train_file, std::string test_file,
 	double *K = construct_kernel(&params);
 	this->kernel = K;
 
-
-	printf("fit: kernel constructed\n");
 	
 	if (!kernel_file.empty()) {
 		printf("Writing kernel to %s...\n", kernel_file.c_str());
@@ -418,6 +519,9 @@ double SVM::score(std::string metric) {
 			labelind = i;
 	}
 
+	FILE *auc_file;
+	auc_file = fopen("auc_file.txt", "w+");
+
 	int svcount = 0;
 	for (int i = 0; i < n_str_test; i++) {
 		if (this->kernel_type == GAKCO) {
@@ -444,6 +548,7 @@ double SVM::score(std::string metric) {
 		// probs = [prob_pos, prob_neg], not [prob_neg, prob_pos]
 		double probs[2];
 		double guess = svm_predict_probability(this->model, x, probs);
+		fprintf(auc_file, "%d,%f\n", test_labels[i], probs[0]);
 
 		if (test_labels[i] > 0) {
 			pos[pagg] = probs[labelind];
@@ -467,6 +572,12 @@ double SVM::score(std::string metric) {
 		if ((guess < 0.0 && test_labels[i] < 0) || (guess > 0.0 && test_labels[i] > 0)) {
 			correct++;
 		}
+	}
+
+	fclose(auc_file);
+
+	if (pagg == 0 && metric == "auc") {
+		printf("No positive examples were in the test set. AUROC is undefined in this case.\n");
 	}
 
 	double tpr = tp / (double) pagg;

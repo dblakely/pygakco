@@ -35,8 +35,11 @@ PYBIND11_MODULE(igakco, m) {
             py::arg("Ytrain"),
             py::arg("Xtest"),
             py::arg("Ytest"),
-            py::arg("dictionary_size"),
-            py::arg("kernel_file"))
+            py::arg("kernel_file")="")
+        .def("cv", &SVM::cv,
+            py::arg("X"),
+            py::arg("Y"),
+            py::arg("num_folds")=7)
         .def("fit_from_arrays", [](SVM &self, py::list Xtrain, 
                 py::array_t<int> Ytrain, 
                 py::list Xtest, py::array_t<int> Ytest,

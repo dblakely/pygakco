@@ -8,4 +8,5 @@ pybind11_add_module(igakco
 	src/shared.cpp
 	src/gakco_core.cpp
 	src/dataset.cpp
-	src/libsvm-code/libsvm.cpp)
+	src/libsvm-code/libsvm.cpp
+	src/libsvm-code/eval.cpp)

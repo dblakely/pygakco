@@ -11,8 +11,6 @@
 
 #define Malloc(type,n) (type *)malloc((n)*sizeof(type))
 
-//./iGakco -S 2 -h 1 -p -g 10 -m 9 -C 0.1 -t 20 /home/ec2-user/iGakco_test/data/1.34.train.fasta /home/ec2-user/iGakco_test/data/1.34.test.fasta outdict.txt /home/ec2-user/iGakco_test/results/igakco/1.34/labelout.txt
-
 void kernel_build_parallel(int tid, WorkItem *workQueue, int queueSize,
 	pthread_mutex_t *mutexes, kernel_params *params, double *Ksfinal) {
 
@@ -33,7 +31,6 @@ void kernel_build_parallel(int tid, WorkItem *workQueue, int queueSize,
 
 	int num_comb = nchoosek(g, k);
 
-
 	// where this thread will store its work
 	unsigned int *Ks = (unsigned int *) malloc(n_str_pairs * sizeof(unsigned int));
 	memset(Ks, 0, sizeof(unsigned int) * n_str_pairs);
@@ -41,7 +38,6 @@ void kernel_build_parallel(int tid, WorkItem *workQueue, int queueSize,
 	bool working = true;
 
 	while (working) {
-
 		WorkItem workItem = workQueue[itemNum];
 
 		// specifies which partial kernel is to be computed
@@ -79,7 +75,7 @@ void kernel_build_parallel(int tid, WorkItem *workQueue, int queueSize,
 		}
 
 		// sort the g-mers (this is relatively fast)
-		cntsrtna(sortIdx, feat1, k, nfeat, dict_size);    
+		cntsrtna(sortIdx, feat1, k, nfeat, dict_size);
 
 		for (int j1 = 0; j1 < nfeat; ++j1) {
 			for (int j2 = 0; j2 <  k; ++j2) {
@@ -87,6 +83,7 @@ void kernel_build_parallel(int tid, WorkItem *workQueue, int queueSize,
 			}
 			group_srt[j1] = (*features).group[sortIdx[j1]];
 		}
+
 		// update cumulative mismatch profile (slow)
 		countAndUpdateTri(Ks, features_srt, group_srt, k, nfeat, total_str);
 
@@ -110,7 +107,7 @@ void kernel_build_parallel(int tid, WorkItem *workQueue, int queueSize,
 
 	// set up the mutexes to lock as you go through the matrix
 	int cusps[num_mutex];
-	for (int i = 0; i < num_mutex; i++){
+	for (int i = 0; i < num_mutex; i++) {
 		cusps[i] = (int) (i * ((double) n_str_pairs) / num_mutex);
 	}
 
