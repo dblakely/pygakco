@@ -40,6 +40,9 @@ public:
 
 	SVM(int g, int m, double C, double nu, double eps, std::string kernel);
 	void toString();
+	void fit_numerical(std::vector<std::vector<int> > Xtrain, 
+		std::vector<int> Ytrain, std::vector<std::vector<int> > Xtest,
+		std::vector<int> Ytest, std::string kernel_file);
 	void fit(std::string train_file, std::string test_file, 
 		std::string dict, bool quiet, std::string kernel_file);
 	void predict(std::string predictions_file);
@@ -47,6 +50,7 @@ public:
 		std::vector<std::string> Xtest, std::vector<int> Ytest, 
 		std::string kernel_file);
 	double score(std::string metric);
+	double cv(std::vector<std::vector<int> > X, std::vector<int> Y, int num_folds);
 };
 
 #endif

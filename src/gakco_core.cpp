@@ -11,8 +11,6 @@
 
 #define Malloc(type,n) (type *)malloc((n)*sizeof(type))
 
-//./iGakco -S 2 -h 1 -p -g 10 -m 9 -C 0.1 -t 20 /home/ec2-user/iGakco_test/data/1.34.train.fasta /home/ec2-user/iGakco_test/data/1.34.test.fasta outdict.txt /home/ec2-user/iGakco_test/results/igakco/1.34/labelout.txt
-
 void kernel_build_parallel(int tid, WorkItem *workQueue, int queueSize,
 	pthread_mutex_t *mutexes, kernel_params *params, double *Ksfinal) {
 
@@ -40,7 +38,6 @@ void kernel_build_parallel(int tid, WorkItem *workQueue, int queueSize,
 	bool working = true;
 
 	while (working) {
-
 		WorkItem workItem = workQueue[itemNum];
 
 		// specifies which partial kernel is to be computed
@@ -78,7 +75,7 @@ void kernel_build_parallel(int tid, WorkItem *workQueue, int queueSize,
 		}
 
 		// sort the g-mers (this is relatively fast)
-		cntsrtna(sortIdx, feat1, k, nfeat, dict_size);    
+		cntsrtna(sortIdx, feat1, k, nfeat, dict_size);
 
 		for (int j1 = 0; j1 < nfeat; ++j1) {
 			for (int j2 = 0; j2 <  k; ++j2) {
@@ -86,6 +83,7 @@ void kernel_build_parallel(int tid, WorkItem *workQueue, int queueSize,
 			}
 			group_srt[j1] = (*features).group[sortIdx[j1]];
 		}
+
 		// update cumulative mismatch profile (slow)
 		countAndUpdateTri(Ks, features_srt, group_srt, k, nfeat, total_str);
 
@@ -109,7 +107,7 @@ void kernel_build_parallel(int tid, WorkItem *workQueue, int queueSize,
 
 	// set up the mutexes to lock as you go through the matrix
 	int cusps[num_mutex];
-	for (int i = 0; i < num_mutex; i++){
+	for (int i = 0; i < num_mutex; i++) {
 		cusps[i] = (int) (i * ((double) n_str_pairs) / num_mutex);
 	}
 
@@ -132,7 +130,6 @@ void kernel_build_parallel(int tid, WorkItem *workQueue, int queueSize,
 			Ksfinal[j1] += val;
 	}
 	pthread_mutex_unlock(&mutexes[num_mutex - 1]);
-
 	free(Ks);
 }
 
@@ -154,24 +151,28 @@ double* construct_kernel(kernel_params *params) {
 	memset(K, 0, params->n_str_pairs * sizeof(double));
 
 	/* Determine how many threads to use */
-	if (params->num_threads == -1) {
+	int num_threads = params->num_threads;
+	if (num_threads == -1) {
 		int numCores = std::thread::hardware_concurrency();
-		params->num_threads = (numCores > 20) ? 20 : numCores;
+		num_threads = (numCores > 20) ? 20 : numCores;
 	}
-	params->num_threads = (params->num_threads > queueSize) ? queueSize : params->num_threads;
+	num_threads = (num_threads > queueSize) ? queueSize : num_threads;
 
 	/* Create an array of mutex locks */
-	params->num_mutex = (-1 || params->num_mutex > params->num_threads) ? 
-		params->num_threads : params->num_mutex; 
-	pthread_mutex_t *mutexes = (pthread_mutex_t*) malloc(params->num_mutex * sizeof(pthread_mutex_t));
-	for (int i = 0; i < params->num_mutex; i++){
+	int num_mutex = params->num_mutex;
+	num_mutex = (num_mutex == -1 || num_mutex > num_threads) ? num_threads : num_mutex; 
+	pthread_mutex_t *mutexes = (pthread_mutex_t*) malloc(num_mutex * sizeof(pthread_mutex_t));
+	for (int i = 0; i < num_mutex; i++){
 		pthread_mutex_init(&mutexes[i], NULL);
 	}
 
+	params->num_threads = num_threads;
+	params->num_mutex = num_mutex;
+
 	/* Multithreaded kernel construction */
-	if (!params->quiet) printf("Computing kernel matrix using %d threads...\n", params->num_threads);
+	if (!params->quiet) printf("Computing kernel matrix using %d threads...\n", num_threads);
 	std::vector<std::thread> threads;
-	for (int tid = 0; tid < params->num_threads; tid++) {
+	for (int tid = 0; tid < num_threads; tid++) {
 		threads.push_back(std::thread(kernel_build_parallel, tid, workQueue, queueSize, mutexes, params, K));
 	}
 
@@ -203,6 +204,71 @@ double *construct_test_kernel(int n_str_train, int n_str_test, double *K) {
 		}
 	}
 	return test_K;
+}
+
+double *run_cross_validation(double *K, std::string metric, int k) {
+	return 0;
+}
+
+svm_problem *create_svm_problem(double *K, int *labels, kernel_params *kernel_param, svm_parameter *svm_param) {
+	long int n_str = kernel_param->total_str;
+	long int n_str_train = kernel_param->n_str_train;
+
+	struct svm_problem* prob = Malloc(svm_problem, 1);
+	const char* error_msg;
+
+	svm_node** x;
+	svm_node* x_space;
+	prob->l = n_str_train;
+	prob->y = Malloc(double, prob->l);
+	x = Malloc(svm_node*, prob->l);
+	if (svm_param->kernel_type == GAKCO) {
+		x_space = Malloc(struct svm_node, (n_str_train + 1) * n_str_train);
+		int totalind = 0;
+		for (int i = 0; i < n_str_train; i++) {
+			x[i] = &x_space[totalind];
+			for (int j = 0; j < n_str_train; j++) {
+				x_space[j + i * (n_str_train + 1)].index = j + 1; 
+				x_space[j + i * (n_str_train + 1)].value = tri_access(K, i, j);
+			}
+			totalind += n_str_train;
+			x_space[totalind].index = -1;
+			totalind++;
+			prob->y[i] = labels[i];
+		}
+		//this->x_space = x_space;
+	} else if (svm_param->kernel_type == LINEAR || svm_param->kernel_type == RBF) {
+		x_space = Malloc(struct svm_node, (n_str_train + 1) * n_str_train);
+		int totalind = 0;
+		for (int i = 0; i < n_str_train; i++) {
+			x[i] = &x_space[totalind];
+			for (int j = 0; j < n_str_train; j++) {
+				x_space[j + i * (n_str_train + 1)].index = j + 1; 
+				x_space[j + i * (n_str_train + 1)].value = tri_access(K, i, j);
+			}
+			totalind += n_str_train;
+			x_space[totalind].index = -1;
+			totalind++;
+			prob->y[i] = labels[i];
+		}
+		//this->x_space = x_space;
+	}
+
+	prob->x = x;
+
+	// if quiet mode, set libsvm's print function to null
+	if (kernel_param->quiet) {
+		svm_set_print_string_function(&print_null);
+	}
+
+	error_msg = svm_check_parameter(prob, svm_param);
+
+	if (error_msg) {
+		fprintf(stderr, "ERROR: %s\n", error_msg);
+		exit(1);
+	}
+
+	return prob;
 }
 
 svm_model *train_model(double *K, int *labels, kernel_params *kernel_param, svm_parameter *svm_param) {

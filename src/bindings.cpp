@@ -1,5 +1,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl_bind.h>
+#include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 #include "svm.hpp"
 
@@ -29,6 +30,16 @@ PYBIND11_MODULE(igakco, m) {
         .def("predict", 
             &SVM::predict, 
             py::arg("predictions_file"))
+        .def("fit_numerical", &SVM::fit_numerical,
+            py::arg("Xtrain"),
+            py::arg("Ytrain"),
+            py::arg("Xtest"),
+            py::arg("Ytest"),
+            py::arg("kernel_file")="")
+        .def("cv", &SVM::cv,
+            py::arg("X"),
+            py::arg("Y"),
+            py::arg("num_folds")=7)
         .def("fit_from_arrays", [](SVM &self, py::list Xtrain, 
                 py::array_t<int> Ytrain, 
                 py::list Xtest, py::array_t<int> Ytest,
