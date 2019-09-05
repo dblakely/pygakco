@@ -1,9 +1,9 @@
-# PyGakco: Fast and Easy Sequence Analysis
+# iGakco: Fast and Accurate Sequence Classification using Support Vector Machines
 
 [![Build Status](https://travis-ci.org/pybind/igakco.svg?branch=master)](https://travis-ci.org/pybind/igakco)
 [![Build status](https://ci.appveyor.com/api/projects/status/57nnxfm4subeug43/branch/master?svg=true)](https://ci.appveyor.com/project/dean0x7d/cmake-example/branch/master)
 
-A Python package for training SVM classifiers for sequence analysis. Build with the iGakco gapped k-mer algorithm, [pybind11](https://github.com/pybind/pybind11), and [LIBSVM](https://github.com/cjlin1/libsvm).
+A Python package and string kernel algorithm for training SVM classifiers for sequence analysis. Built with the iGakco gapped k-mer algorithm, [pybind11](https://github.com/pybind/pybind11), and [LIBSVM](https://github.com/cjlin1/libsvm).
 
 
 ## Prerequisites
@@ -24,6 +24,12 @@ A Python package for training SVM classifiers for sequence analysis. Build with 
 ```
 pip install -i https://test.pypi.org/simple/ igakco-test
 ```
+**With Conda**
+Currently, we only support PyPi builds. If you use Anaconda, we recommend installing pip:
+```
+conda install pip
+```
+And then installing igakco with the above `pip` command.
 
 **From source**
 
@@ -33,11 +39,11 @@ git clone --recursive https://github.com/dblakely/pygakco.git
 ```
 The `--recursive` flag is to make sure the Pybind11 library is cloned as well. Then run:
 
-`pip install ./pygakco`
+`pip install ./igakco`
 
 or
 
-`pip3 install ./pygakco`
+`pip3 install ./igakco`
 
 ## Tutorial
 Example usage:
@@ -83,7 +89,6 @@ Predict:
 * `predictions_file` (required). File where predictions will be written. Format is one prediction, a single number, per line.
 
 ## Special notes for Windows
-
 **Compiler requirements**
 
 Pybind11 requires a C++11 compliant compiler, i.e Visual Studio 2015 on Windows.
@@ -91,14 +96,5 @@ This applies to all Python versions, including 2.7. Unlike regular C extension
 modules, it's perfectly fine to compile a pybind11 module with a VS version newer
 than the target Python's VS version.
 
-**Runtime requirements**
-
-The Visual C++ 2015 redistributable packages are a runtime requirement for this
-project. It can be found [here][vs2015_runtime]. If you use the Anaconda Python
-distribution, you can add `vs2015_runtime` as a platform-dependent runtime
-requirement for you package: see the `conda.recipe/meta.yaml` file in this example.
-
-
 ## License
-
-[FAQ]: 
+See the LICENSE file.
